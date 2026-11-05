@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Open email</title>
+<style>
+  body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;margin:0;padding:40px 20px;text-align:center;color:#1f2937;background:#fff}
+  h1{font-size:20px;margin:0 0 8px}
+  p{margin:8px 0;color:#4b5563;font-size:15px}
+  .btn{display:block;margin:24px auto 0;max-width:320px;padding:14px 16px;border-radius:10px;background:#1a73e8;color:#fff;text-decoration:none;font-size:16px;font-weight:600}
+  .alt{display:block;margin-top:18px;font-size:14px;color:#1a73e8;text-decoration:none}
+  .err{color:#b91c1c}
+</style>
+</head>
+<body>
+<h1>Opening your email app</h1>
+<p id="msg">If nothing happens, tap the button below.</p>
+<a id="open" class="btn" href="#">Open in Gmail</a>
+<a id="mail" class="alt" href="#">Use my default mail app</a>
+<a id="web" class="alt" href="#">Open Gmail in browser</a>
+
+<script>
+(function () {
+  // Usage: mail.html?to=a@b.com&su=Subject%20here&body=Optional%20body
+  var q = new URLSearchParams(location.search);
+  var to = (q.get('to') || '').trim();
+  var su = q.get('su') || q.get('subject') || '';
+  var body = q.get('body') || '';
+  var msgEl = document.getElementById('msg');
+
+  var emailRe = /^[^\s@,]+@[^\s@,]+\.[^\s@,]+(\s*,\s*[^\s@,]+@[^\s@,]+\.[^\s@,]+)*$/;
+  if (!emailRe.test(to)) {
+    msgEl.textContent = 'This link is missing a valid recipient address.';
+    msgEl.className = 'err';
+    ['open', 'mail', 'web'].forEach(function (id) { document.getElementById(id).style.display = 'none'; });
+    return;
+  }
+
+  var enc = encodeURIComponent;
+  var toEnc = to.split(',').map(function (a) { return enc(a.trim()); }).join(',');
+  var bodyQ = body ? '&body=' + enc(body) : '';
+
+  var mailto   = 'mailto:' + toEnc + '?subject=' + enc(su) + bodyQ;
+  var web      = 'https://mail.google.com/mail/?view=cm&fs=1&to=' + enc(to) + '&su=' + enc(su) + bodyQ;
+  var gmailIos = 'googlegmail:///co?to=' + toEnc + '&subject=' + enc(su) + bodyQ;
+  var intent   = 'intent:' + toEnc + '?subject=' + enc(su) + bodyQ +
+                 '#Intent;scheme=mailto;package=com.google.android.gm;action=android.intent.action.SENDTO;' +
+                 'S.browser_fallback_url=' + enc(web) + ';end';
+
+  var ua = navigator.userAgent || '';
+  var isAndroid = /android/i.test(ua);
+  var isIOS = /iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+
+  document.getElementById('mail').href = mailto;
+  document.getElementById('web').href = web;
+
+  var iosTimer = null;
+  function cancelIosFallback() { if (iosTimer) { clearTimeout(iosTimer); iosTimer = null; } }
+  document.addEventListener('visibilitychange', function () { if (document.hidden) cancelIosFallback(); });
+  window.addEventListener('pagehide', cancelIosFallback);
+
+  function openGmail() {
+    if (isAndroid) {
+      // Forces the Gmail app; falls back to the web compose page if Gmail is not installed
+      location.href = intent;
+    } else if (isIOS) {
+      // If the Gmail app does not take over, fall back to the default mail app
+      iosTimer = setTimeout(function () { location.href = mailto; }, 1800);
+      location.href = gmailIos;
+    } else {
+      location.href = web;
+    }
+  }
+
+  document.getElementById('open').addEventListener('click', function (e) {
+    e.preventDefault();
+    openGmail();
+  });
+
+  // Try automatically; some in-app browsers block this without a tap, hence the button
+  setTimeout(openGmail, 400);
+})();
+</script>
+</body>
+</html>
