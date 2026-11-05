@@ -4,83 +4,134 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Open email</title>
+<title>Send email</title>
 <style>
-  body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;margin:0;padding:40px 20px;text-align:center;color:#1f2937;background:#fff}
-  h1{font-size:20px;margin:0 0 8px}
+  body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;margin:0;padding:32px 20px;text-align:center;color:#1f2937;background:#fff}
+  h1{font-size:20px;margin:0 0 6px}
   p{margin:8px 0;color:#4b5563;font-size:15px}
-  .btn{display:block;margin:24px auto 0;max-width:320px;padding:14px 16px;border-radius:10px;background:#1a73e8;color:#fff;text-decoration:none;font-size:16px;font-weight:600}
-  .alt{display:block;margin-top:18px;font-size:14px;color:#1a73e8;text-decoration:none}
+  .card{max-width:360px;margin:18px auto 6px;text-align:left;background:#f3f4f6;border-radius:10px;padding:12px 14px;font-size:14px;word-break:break-word}
+  .card div{margin:3px 0}
+  .card b{display:inline-block;min-width:62px;color:#374151}
+  .card span{user-select:all;-webkit-user-select:all}
+  .btn{display:block;width:100%;max-width:360px;box-sizing:border-box;margin:12px auto 0;padding:14px 16px;border-radius:10px;border:1.5px solid #1a73e8;font-size:16px;font-weight:600;text-decoration:none;cursor:pointer;font-family:inherit}
+  .primary{background:#1a73e8;color:#fff}
+  .secondary{background:#fff;color:#1a73e8}
+  .hint{font-size:13px;color:#6b7280;margin-top:22px}
   .err{color:#b91c1c}
 </style>
 </head>
 <body>
-<h1>Opening your email app</h1>
+<h1 id="title">Opening your email app</h1>
 <p id="msg">If nothing happens, tap the button below.</p>
-<a id="open" class="btn" href="#">Open in Gmail</a>
-<a id="mail" class="alt" href="#">Use my default mail app</a>
-<a id="web" class="alt" href="#">Open Gmail in browser</a>
+
+<div class="card" id="card">
+  <div><b>To:</b> <span id="toTxt"></span></div>
+  <div><b>Subject:</b> <span id="suTxt"></span></div>
+</div>
+
+<a id="mail" class="btn primary" href="#">Open my default mail app</a>
+<a id="gmail" class="btn secondary" href="#">Open in Gmail</a>
+<a id="outlook" class="btn secondary" href="#">Open in Outlook</a>
+<button id="copy" class="btn secondary" type="button">Copy address &amp; subject</button>
+<p class="hint" id="hint">No email app? Copy the details and paste them into any mail app or webmail.</p>
 
 <script>
 (function () {
-  // Usage: mail.html?to=a@b.com&su=Subject%20here&body=Optional%20body
+  // Usage: ?to=a@b.com&su=Subject%20here&body=Optional%20body
   var q = new URLSearchParams(location.search);
   var to = (q.get('to') || '').trim();
   var su = q.get('su') || q.get('subject') || '';
   var body = q.get('body') || '';
-  var msgEl = document.getElementById('msg');
+  function $(id) { return document.getElementById(id); }
 
   var emailRe = /^[^\s@,]+@[^\s@,]+\.[^\s@,]+(\s*,\s*[^\s@,]+@[^\s@,]+\.[^\s@,]+)*$/;
   if (!emailRe.test(to)) {
-    msgEl.textContent = 'This link is missing a valid recipient address.';
-    msgEl.className = 'err';
-    ['open', 'mail', 'web'].forEach(function (id) { document.getElementById(id).style.display = 'none'; });
+    $('title').textContent = 'Link problem';
+    $('msg').textContent = 'This link is missing a valid recipient address.';
+    $('msg').className = 'err';
+    ['card', 'mail', 'gmail', 'outlook', 'copy', 'hint'].forEach(function (id) { $(id).style.display = 'none'; });
     return;
   }
 
+  // Show the details (textContent only - the values come from the URL)
+  $('toTxt').textContent = to;
+  $('suTxt').textContent = su || '(none)';
+
   var enc = encodeURIComponent;
   var toEnc = to.split(',').map(function (a) { return enc(a.trim()); }).join(',');
+  var toRaw = toEnc.replace(/%40/g, '@');           // mailto works best with a literal @
   var bodyQ = body ? '&body=' + enc(body) : '';
+  var subj = enc(su);
 
-  var mailto   = 'mailto:' + toEnc + '?subject=' + enc(su) + bodyQ;
-  var web      = 'https://mail.google.com/mail/?view=cm&fs=1&to=' + enc(to) + '&su=' + enc(su) + bodyQ;
-  var gmailIos = 'googlegmail:///co?to=' + toEnc + '&subject=' + enc(su) + bodyQ;
-  var intent   = 'intent:' + toEnc + '?subject=' + enc(su) + bodyQ +
-                 '#Intent;scheme=mailto;package=com.google.android.gm;action=android.intent.action.SENDTO;' +
-                 'S.browser_fallback_url=' + enc(web) + ';end';
+  // 1) Universal: opens whatever mail app the user has set as default
+  var mailto = 'mailto:' + toRaw + '?subject=' + subj + bodyQ;
+
+  // 2) Optional app-specific shortcuts
+  var gmailWeb = 'https://mail.google.com/mail/?view=cm&fs=1&to=' + enc(to) + '&su=' + subj + bodyQ;
+  var gmailIos = 'googlegmail:///co?to=' + toEnc + '&subject=' + subj + bodyQ;
+  var gmailAndroid = 'intent:' + toRaw + '?subject=' + subj + bodyQ +
+    '#Intent;scheme=mailto;package=com.google.android.gm;action=android.intent.action.SENDTO;S.browser_fallback_url=' + enc(gmailWeb) + ';end';
+
+  var outlookWeb = 'https://outlook.office.com/mail/deeplink/compose?to=' + enc(to) + '&subject=' + subj + bodyQ;
+  var outlookIos = 'ms-outlook://compose?to=' + toEnc + '&subject=' + subj + bodyQ;
+  var outlookAndroid = 'intent:' + toRaw + '?subject=' + subj + bodyQ +
+    '#Intent;scheme=mailto;package=com.microsoft.office.outlook;action=android.intent.action.SENDTO;S.browser_fallback_url=' + enc(outlookWeb) + ';end';
 
   var ua = navigator.userAgent || '';
   var isAndroid = /android/i.test(ua);
   var isIOS = /iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+  var isMobile = isAndroid || isIOS;
 
-  document.getElementById('mail').href = mailto;
-  document.getElementById('web').href = web;
+  var timer = null;
+  function cancelTimer() { if (timer) { clearTimeout(timer); timer = null; } }
+  document.addEventListener('visibilitychange', function () { if (document.hidden) cancelTimer(); });
+  window.addEventListener('pagehide', cancelTimer);
 
-  var iosTimer = null;
-  function cancelIosFallback() { if (iosTimer) { clearTimeout(iosTimer); iosTimer = null; } }
-  document.addEventListener('visibilitychange', function () { if (document.hidden) cancelIosFallback(); });
-  window.addEventListener('pagehide', cancelIosFallback);
+  function go(url) { location.href = url; }
+  function openDefault() { go(mailto); }
 
+  // Explicit Gmail / Outlook choice. If the app does not take over on iOS, fall back to the default mail app.
   function openGmail() {
-    if (isAndroid) {
-      // Forces the Gmail app; falls back to the web compose page if Gmail is not installed
-      location.href = intent;
-    } else if (isIOS) {
-      // If the Gmail app does not take over, fall back to the default mail app
-      iosTimer = setTimeout(function () { location.href = mailto; }, 1800);
-      location.href = gmailIos;
-    } else {
-      location.href = web;
-    }
+    if (isAndroid) go(gmailAndroid);
+    else if (isIOS) { timer = setTimeout(openDefault, 1800); go(gmailIos); }
+    else go(gmailWeb);
+  }
+  function openOutlook() {
+    if (isAndroid) go(outlookAndroid);
+    else if (isIOS) { timer = setTimeout(openDefault, 1800); go(outlookIos); }
+    else go(outlookWeb);
   }
 
-  document.getElementById('open').addEventListener('click', function (e) {
-    e.preventDefault();
-    openGmail();
+  $('mail').href = mailto;
+  $('gmail').addEventListener('click', function (e) { e.preventDefault(); openGmail(); });
+  $('outlook').addEventListener('click', function (e) { e.preventDefault(); openOutlook(); });
+
+  // Last resort: copy the details so they can be pasted into any mail app
+  $('copy').addEventListener('click', function () {
+    var text = 'To: ' + to + '\nSubject: ' + su;
+    var btn = $('copy');
+    function done(ok) { btn.textContent = ok ? 'Copied' : 'Press and hold the details above to copy'; }
+    function legacy() {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(ta);
+      done(ok);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, legacy);
+    } else { legacy(); }
   });
 
-  // Try automatically; some in-app browsers block this without a tap, hence the button
-  setTimeout(openGmail, 400);
+  if (isMobile) {
+    // Try the default mail app automatically; some in-app browsers block this without a tap, hence the buttons
+    setTimeout(openDefault, 400);
+  } else {
+    $('title').textContent = 'Send your email';
+    $('msg').textContent = 'Choose how you would like to send it.';
+  }
 })();
 </script>
 </body>
